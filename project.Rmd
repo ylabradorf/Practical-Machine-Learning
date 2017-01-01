@@ -1,0 +1,113 @@
+---
+title: "Project - Practical Machine Learning"
+author: Yessika Labrador
+output: html_document
+---
+
+## Libraries
+These libraries are needed to downloading and managing the data, also to create different models:
+```{r cache=FALSE, message=FALSE}
+library(dplyr)
+library(RCurl)
+library(caret)
+library(randomForest)
+library(rpart)
+```
+
+# Loading Data
+The data used in this study is data gathered from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. This data is available here:
+
+- https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+- https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r cache=TRUE}
+trainURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+fileTrain <- "/tmp/train.csv"
+fileTest <- "/tmp/test.csv"
+
+download.file(url=trainURL, destfile=fileTrain, method='curl')
+download.file(url=testURL, destfile=fileTest, method='curl')
+
+```
+
+With the data downloaded, is time to load it on R
+```{r cache=TRUE}
+train <- read.csv(fileTrain)
+test <- read.csv(fileTest)
+```
+
+Some features about data are: 
+
+- The number of atributtes are ```r dim(train)[1] ```
+- The name of the users are ```r unique(train$user_name) ```
+- The values to predict are ```r unique(train$classe) ```
+
+# Preprocess
+For this study I'm going to delete some variables using some criterias:
+
+```{r cache=TRUE}
+# Initial size
+dim(train)
+
+# Deleting information variables 
+train <- train %>% select(-c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window)) 
+
+# Deleting variables with NA or empty values
+max_percentage <- dim(train)[1] * 0.90
+train <- train %>% select_if(colSums(!is.na(.)) > max_percentage, colSums(. == "") > max_percentage) 
+
+# Removing zero covariates 
+nsv <- nearZeroVar(train, saveMetrics=TRUE)
+train <- train[ , !(nsv$nzv)]
+
+# Final size
+dim(train)
+```
+
+# Creating models
+For this project I'm going to split over the date to create 2 sets: training and validation. And later I'm going to fit 2 models and compare them both.
+
+```{r}
+set.seed(1234)
+inTrain <- createDataPartition(train$classe, p = 0.7, list = FALSE)
+training <- train[inTrain,]
+validation <- train[-inTrain,]
+
+```
+
+RandomForest Model
+
+```{r}
+rfModel <- randomForest(classe ~ ., data = training)
+rfPred <- predict(rfModel, validation)
+rfMatrix <- confusionMatrix(rfPred, validation$classe)
+rfMatrix$table
+rfMatrix$overall['Accuracy']
+```
+
+RandomTree Model
+
+```{r}
+rpartModel <- rpart(classe ~ ., data = training, method = "class")
+rpartPred <- predict(rpartModel, validation, type="class")
+rpartMatrix <- confusionMatrix(rpartPred, validation$classe)
+rpartMatrix$table
+rpartMatrix$overall['Accuracy']
+```
+
+Because tha accurancy for RandomForest is better than RandomTree, RandomForest is the selected classifier.
+
+# Test Models
+
+Finally, I'm going to make predictions for the testing set using the model fitted with RandomForest
+```{r}
+predict(rfModel, test)
+```
+
+# Conclusions
+The model created provided satisfatory predictions for testing data
+
+
+
